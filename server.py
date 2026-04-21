@@ -53,16 +53,15 @@ def parse_krw_usd():
         response = requests.get('https://api.exchangerate-api.com/v4/latest/KRW', timeout=10)
         data = response.json()
         if data.get('rates') and data['rates'].get('USD'):
-            # API возвращает 0.00068 (сколько долларов за 1 вону)
-            # Нам нужно сколько вон за 1 доллар
+            # API возвращает сколько USD стоит 1 KRW (например, 0.00068)
+            # Нам нужно сколько KRW стоит 1 USD
             krw_usd_rate = 1 / data['rates']['USD']
-            cached_rates['krw_usd'] = krw_usd_rate
+            cached_rates['krw_usd'] = round(krw_usd_rate, 2)
             return True
         return False
     except Exception as e:
         print(f"Ошибка KRW/USD: {e}")
         return False
-
 def update_rates():
     print(f"[{datetime.now()}] Обновление курсов...")
     parse_atb_rates()
