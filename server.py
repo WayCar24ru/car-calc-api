@@ -7,7 +7,7 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)
 
-# Кеш для курсов
+# Кеш для курсов (сохраняем между запросами)
 cached_rates = {
     "usd": 77.52,
     "eur": 92.08,
@@ -92,31 +92,42 @@ def update_rates():
     parse_cbr_eur()
     parse_krw_usd()
     cached_rates['last_update'] = datetime.now().isoformat()
-    print(f"[{datetime.now()}] Курсы обновлены: USD={cached_rates['usd']}, EUR={cached_rates['eur']}, KRW/USD={cached_rates['krw_usd']}")
+    print(f"[{datetime.now()}] Курсы обновлены: USD={cached_rates['usd']}, EUR={cached_rates['eur']}")
 
 @app.route('/rates')
 def get_rates():
     update_rates()
     return jsonify(cached_rates)
 
+@app.route('/settings', methods=['GET'])
+def get_settings():
+    return jsonify({
+        "rates": cached_rates,
+        "countryCosts": cached_country_costs,
+        "fixedCosts": cached_fixed_costs
+    })
+
 @app.route('/save', methods=['POST'])
 def save_settings():
     try:
         data = request.json
-        print(f"[{datetime.now()}] Получены данные для сохранения: {data}")
+        print(f"[{datetime.now()}] Получены данные для сохранения")
         
+        # Сохраняем курсы
         if data.get('rates'):
             for key, value in data['rates'].items():
                 if key in cached_rates:
                     cached_rates[key] = value
-            print(f"Сохранены курсы: {cached_rates}")
+            print(f"Сохранены курсы: USD={cached_rates['usd']}, EUR={cached_rates['eur']}")
         
+        # Сохраняем расходы по странам
         if data.get('countryCosts'):
             for country, costs in data['countryCosts'].items():
                 if country in cached_country_costs:
                     cached_country_costs[country] = costs
             print(f"Сохранены расходы по странам")
         
+        # Сохраняем фиксированные расходы
         if data.get('fixedCosts'):
             for key, value in data['fixedCosts'].items():
                 if key in cached_fixed_costs:
@@ -127,14 +138,6 @@ def save_settings():
     except Exception as e:
         print(f"Ошибка сохранения: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/settings', methods=['GET'])
-def get_settings():
-    return jsonify({
-        "rates": cached_rates,
-        "countryCosts": cached_country_costs,
-        "fixedCosts": cached_fixed_costs
-    })
 
 if __name__ == '__main__':
     update_rates()
