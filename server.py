@@ -3,11 +3,13 @@ from flask_cors import CORS
 import requests
 import re
 from datetime import datetime
+import threading
+import time
 
 app = Flask(__name__)
 CORS(app)
 
-# Кеш для курсов (сохраняем между запросами)
+# Кеш для курсов
 cached_rates = {
     "usd": 77.52,
     "eur": 92.08,
@@ -87,16 +89,21 @@ def parse_krw_usd():
         return False
 
 def update_rates():
-    print(f"[{datetime.now()}] Обновление курсов...")
+    print(f"[{datetime.now()}] Обновление курсов с АТБ...")
     parse_atb_rates()
     parse_cbr_eur()
     parse_krw_usd()
     cached_rates['last_update'] = datetime.now().isoformat()
     print(f"[{datetime.now()}] Курсы обновлены: USD={cached_rates['usd']}, EUR={cached_rates['eur']}")
 
+# Фоновое обновление каждые 30 минут
+def background_updater():
+    while True:
+        time.sleep(1800)  # 30 минут
+        update_rates()
+
 @app.route('/rates')
 def get_rates():
-    update_rates()
     return jsonify(cached_rates)
 
 @app.route('/settings', methods=['GET'])
@@ -111,34 +118,39 @@ def get_settings():
 def save_settings():
     try:
         data = request.json
-        print(f"[{datetime.now()}] Получены данные для сохранения")
+        print(f"[{datetime.now()}] Сохранение настроек")
         
-        # Сохраняем курсы
         if data.get('rates'):
             for key, value in data['rates'].items():
                 if key in cached_rates:
                     cached_rates[key] = value
-            print(f"Сохранены курсы: USD={cached_rates['usd']}, EUR={cached_rates['eur']}")
+            print(f"Сохранены курсы: USD={cached_rates['usd']}")
         
-        # Сохраняем расходы по странам
         if data.get('countryCosts'):
             for country, costs in data['countryCosts'].items():
                 if country in cached_country_costs:
                     cached_country_costs[country] = costs
-            print(f"Сохранены расходы по странам")
         
-        # Сохраняем фиксированные расходы
         if data.get('fixedCosts'):
             for key, value in data['fixedCosts'].items():
                 if key in cached_fixed_costs:
                     cached_fixed_costs[key] = value
-            print(f"Сохранены фиксированные расходы")
         
         return jsonify({"status": "ok", "message": "Настройки сохранены"})
     except Exception as e:
         print(f"Ошибка сохранения: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-if __name__ == '__main__':
+@app.route('/update', methods=['POST'])
+def force_update():
     update_rates()
+    return jsonify({"status": "ok", "rates": cached_rates})
+
+if __name__ == '__main__':
+    # Первое обновление при запуске
+    update_rates()
+    # Запускаем фоновое обновление
+    thread = threading.Thread(target=background_updater)
+    thread.daemon = True
+    thread.start()
     app.run(host='0.0.0.0', port=10000)
