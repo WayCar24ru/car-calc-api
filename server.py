@@ -78,3 +78,11 @@ def get_rates():
 if __name__ == '__main__':
     update_rates()
     app.run(host='0.0.0.0', port=10000)
+
+@app.route('/save', methods=['POST'])
+def save_rates():
+    global cached_rates
+    data = request.json
+    if data.get('rates'):
+        cached_rates.update(data['rates'])
+    return jsonify({"status": "ok"})
